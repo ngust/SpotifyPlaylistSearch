@@ -73,8 +73,11 @@
     <div class="container">
       <h1>Search for an Artist</h1>
       <p>Type an artist name and click on "Search". Then, click on any album from the results to play 30 seconds of its first track.</p>
+      <form id="artist-form">
+          <input type="text" id="artist" value="" class="form-control" placeholder="Type an Artist Name"/>
+      </form>
       <form id="search-form">
-          <input type="text" id="query" value="" class="form-control" placeholder="Type an Artist Name"/>
+          <input type="text" id="query" value="" class="form-control" placeholder="Type an Playlist Name"/>
           <input type="submit" id="search" class="btn btn-primary" value="Search" />
       </form>
       <div id="results"></div>
@@ -82,9 +85,9 @@
 
     <script id="results-template" type="text/x-handlebars-template">
         <h2>Results</h2>
-        {{#each albums.items}}
-        <div style="background-image:url({{images.0.url}})" data-album-id="{{id}}" class="cover">
-      <!--     <img width="300" src="{{images.0.url}}" /> -->
+        {{#each this}}
+        <div style="background-image:url({{coverImage}})" data-album-id="{{id}}" class="cover">
+        <h2>{{name}}</h2>
         </div>
         {{/each}}
     </script>
@@ -185,6 +188,10 @@
             playingCssClass = 'playing',
             audioObject = null;
         var access_token = params.access_token;
+        var playlistArray = []
+        var currentPlaylist
+        var currentPlaylistID
+        var coverImage
 
         var fetchTracks = function (albumId, callback) {
             $.ajax({
@@ -197,11 +204,38 @@
                 }
             });
         };
+        // var searchPlaylist = function (tracks) {
+        //     $.ajax({
+        //         url: tracks,
+        //         headers: {
+        //              'Authorization':'Bearer ' + access_token
+        //            },
+        //         success: function (response) {
+                    
+        //             $.each(response.items, function (index, value) {
+        //               countPlayists++
+        //               console.log("playlists " + countPlayists);
+        //               // console.log(value.track.name);
+        //               // console.log(value.track.artists[0].name);
+        //               var trackArtists = [];
+                      
+        //               $.each(value.track.artists, function (index, value) {
+        //                 countArtists++
+        //                 console.log("artists " + countArtists);
+        //                 trackArtists.push(value.name)
+        //               });
+        //                   playlistArray.push({
+        //                       'name': value.track.name,
+        //                       'artists': trackArtists
+        //                   });
+        //             });
+        //         }
+        //     });
+        // };
 
         var searchAlbums = function (query) {
-            $.ajax({
-                 method: 'GET',
-                 dataType: 'json',
+            console.log("searchAlbums Initialized");
+            return $.ajax({
                 url: 'https://api.spotify.com/v1/search',
                 headers: {
                      'Authorization':'Bearer ' + access_token
@@ -209,15 +243,74 @@
                 data: {
                     q: query,
                     type: 'playlist',
-                },
-                success: function (response) {
-                    console.log(response);
-                    resultsPlaceholder.innerHTML = resultsTemplate(response);
                 }
             });
-            
-            console.log(access_token);
         };
+
+        var searchAlbumsComplete = function (response) {
+          console.log("searchAlbumsComplete Initialized");
+          console.log(response);
+          // resultsPlaceholder.innerHTML = resultsTemplate(response);
+          // console.log(response.playlists.items);
+          var promises = [];
+          $.each(response.playlists.items, function (index, value) {
+            currentPlaylist = value.name;
+            currentPlaylistID = value.id;
+            coverImage = value.images[0].url;
+            promises.push(
+            $.ajax({
+                url: value.tracks.href,
+                headers: {
+                     'Authorization':'Bearer ' + access_token
+                   }
+
+                   }).then(function (response) {
+                    // console.log(response);
+                    $.each(response.items, function (index, value) {
+                      // console.log(value.track.name);
+                      // console.log(value.track.artists[0].name);
+                      var trackArtists = [];
+                      
+                      $.each(value.track.artists, function (index, value) {
+                        trackArtists.push(value.name)
+                      });
+                          playlistArray.push({
+                              'name': value.track.name,
+                              'artists': trackArtists,
+                              'playlist': currentPlaylist,
+                              'playlistID': currentPlaylistID,
+                              'coverImage': coverImage
+                          });
+                    });
+                })
+            
+          );
+            // searchPlaylist(value.tracks.href);
+          });
+          $.when.apply($, promises).then(searchArtist(document.getElementById('artist').value));
+        };
+
+        var searchArtist = function (query) {
+          console.log("Seatch Artist Initialized");
+          console.log("Artist query " + query);
+          var searchResults = [];
+          setTimeout(function(){
+            console.log("later " + playlistArray.length);
+            $.each(playlistArray, function (index, value) {
+            console.log("Search Artist Running");
+            var test = value.artists;
+            // console.log(test);
+            // console.log(test.includes(query));
+            if (test.includes(query)) {
+              console.log(value);
+              searchResults.push(value);
+            }
+          });
+            console.log(searchResults);
+            resultsPlaceholder.innerHTML = resultsTemplate(searchResults);
+          }, 5000);
+
+        }
 
         results.addEventListener('click', function (e) {
             var target = e.target;
@@ -245,7 +338,7 @@
 
         document.getElementById('search-form').addEventListener('submit', function (e) {
             e.preventDefault();
-            searchAlbums(document.getElementById('query').value);
+            searchAlbums(document.getElementById('query').value).then(searchAlbumsComplete);
         }, false);
 
 
